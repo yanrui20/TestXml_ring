@@ -1,0 +1,266 @@
+#!/bin/bash
+
+USER_ENV=`whoami`
+
+function extract_host_from_url() {
+  url=$1
+  host=${url%:*}
+  echo $(echo $host | tr -d '[]')
+}
+
+function extract_port_from_url() {
+  url=$1
+  echo ${url##*:}
+}
+
+if [ ! -z "$ARNOLD_SCHEDULER_HOSTS" ]; then
+  if [[ "$ARNOLD_DEVICE_TYPE" == *A100* ]]; then 
+    source "$ARNOLD_ENTRYPOINT_DIR/tools/BCCLRUN" $@
+  else 
+    source "$ARNOLD_ENTRYPOINT_DIR/tools/BYTEPSRUN" $@
+  fi 
+else
+  set -x
+
+  echo "=== Arnold MPI/Hrovod entry script ==="
+  echo "=== contact:  zhuyibo@bytedance.com ==="
+
+  ### prepare basic env
+  role=$ARNOLD_ROLE
+  
+  # if the role is not worker, run the original code and return
+  if [[ "$role" != "worker" ]]; then
+    $@ || exit 1
+    exit 0
+  fi
+
+  worker_num=$ARNOLD_WORKER_NUM
+  export ARNOLD_DISTRIBUTED_FRAMEWORK="horovod"
+
+  ### prepare env for mpi
+  if [[ "$USER_ENV" == "root" ]]; then
+    # if the cmd is exec by `sudo -E`, HOME env will be wrong and needs to be updated manually
+    export HOME=/root
+    chown root:root /root
+    rm -rf /var/run/sshd
+    mkdir -p /var/run/sshd
+  else
+    [[ -d /var/run/sshd ]] || sudo mkdir -p /var/run/sshd
+    [[ "$(stat -c '%U:%G' /var/run/sshd)" == "root:root" ]] || sudo chown root:root /var/run/sshd
+  fi
+  rm -rf ~/.ssh/
+  mkdir -p ~/.ssh/
+  cp /opt/tiger/arnold/arnold_entrypoint/tools/id_rsa ~/.ssh/
+  cp /opt/tiger/arnold/arnold_entrypoint/tools/id_rsa.pub ~/.ssh/authorized_keys
+  echo "SEC_TOKEN_PATH=$SEC_TOKEN_PATH" >> ~/.ssh/environment
+  chmod 600 ~/.ssh/id_rsa
+
+  cp /opt/tiger/arnold/arnold_entrypoint/tools/sshd_config ~/.ssh/
+  sed -i 's/^#HostKey \/etc\//HostKey  ~\/\./g' ~/.ssh/sshd_config
+  ssh-keygen -t rsa  -f ~/.ssh/ssh_host_rsa_key -N '' -q
+  ssh-keygen -t ecdsa  -f ~/.ssh/ssh_host_ecdsa_key -N '' -q
+  ssh-keygen -t ed25519  -f ~/.ssh/ssh_host_ed25519_key -N '' -q
+
+  hostfile=/opt/tiger/hostfile
+  ssh_config=~/.ssh/config
+  rm -f $hostfile
+  rm -f $ssh_config
+  echo -e "StrictHostKeyChecking no\nUserKnownHostsFile /dev/null" >>${ssh_config}
+
+  if [ ! -z "$ARNOLD_WORKER_HOSTS" ]; then
+    hosts=$ARNOLD_WORKER_HOSTS
+  else
+    hosts=$METIS_WORKER_HOSTS
+  fi
+
+  IFS=','
+  HOST_CONFIGS=($hosts)
+  unset IFS
+  worker_id=$ARNOLD_ID
+  WORKER0_IP=$(extract_host_from_url ${HOST_CONFIGS[0]})
+  WORKER0_PORT=$(extract_port_from_url ${HOST_CONFIGS[0]})
+  worker_index=0
+  for ((i=0; i<${#HOST_CONFIGS[@]}; i+=${ARNOLD_WORKER_PORTS})); do
+    config=${HOST_CONFIGS[i]}
+    echo $config
+    HOST_INFO_IP=$(extract_host_from_url $config)
+    HOST_INFO_PORT=$(extract_port_from_url $config)
+    echo "worker-${worker_index}" >>${hostfile}
+    echo -e "Host worker-${worker_index}\n    Hostname ${HOST_INFO_IP}\n    Port ${HOST_INFO_PORT}" >>${ssh_config}
+    if [[ $worker_id == $worker_index ]]; then
+      mpi_ssh_host=${HOST_INFO_IP}
+      mpi_ssh_port=${HOST_INFO_PORT}
+    fi
+    worker_index=$((worker_index+1))
+  done
+
+  ### start sshd
+  echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> ~/.ssh/environment
+  /usr/sbin/sshd -p $mpi_ssh_port -f ~/.ssh/sshd_config
+  if [[ "$(lsof -i:$mpi_ssh_port -F | grep -E '^csshd$')" == "" ]] ||
+    [[ "$(ssh $mpi_ssh_host -p $mpi_ssh_port cat $ssh_config)" != "$(cat $ssh_config)" ]]; then
+    echo "Failed to start sshd on $mpi_ssh_host:$mpi_ssh_port."
+    exit 1
+  fi
+
+  ### Take different roles action
+  if [[ "$ARNOLD_ID" != "0" ]]; then
+    state="not started"
+    while true; do
+      if [ ! -z "$MPI_INITIALIZE_ENV_ONLY" ]; then
+          echo "MPI_RUN finish initialized environment, exit"
+          exit 0
+      fi
+      test_worker0=`head -n 1 2>/dev/null < /dev/tcp/${WORKER0_IP}/${WORKER0_PORT}`
+      if [ "$test_worker0" == "" ]; then
+        if [ "$state" == "started" ]; then
+          echo "worker 0 finished, exit"
+          exit 0
+        fi
+        echo "Waiting for worker 0 to start"
+      else
+        state="started"
+        echo "Waiting for worker 0 to finish"
+      fi
+      sleep 8s
+    done
+  else
+    for ((i=0; i<${#HOST_CONFIGS[@]}; i+=${ARNOLD_WORKER_PORTS})); do
+      config=${HOST_CONFIGS[i]}
+      HOST_INFO_IP=$(extract_host_from_url $config)
+      HOST_INFO_PORT=$(extract_port_from_url $config)
+      while true; do
+        test_worker=`head -n 1 2>/dev/null < /dev/tcp/${HOST_INFO_IP}/${HOST_INFO_PORT}`
+        if [ "$test_worker" == "" ]; then
+          echo "Waiting for worker $config to be ready"
+        else
+          break
+        fi
+        sleep 8s
+      done
+    done
+    sleep 8s
+  fi
+
+  process_num=$(($ARNOLD_WORKER_NUM * $ARNOLD_WORKER_GPU))
+
+  if [[ "$ARNOLD_QUOTA_POOL" == "third_party_aws" ]]; then
+      mapping="-bind-to none"
+  else
+    if [[ $ARNOLD_WORKER_GPU -eq 8 ]]; then
+        mapping="-bind-to none"
+    else
+        mapping="-bind-to none"
+    fi
+  fi
+
+  # ref: https://bytedance.feishu.cn/docx/ZYxmdWcmaoONZDxJ3hRcx9Z7nq8
+  # NCCL_SOCKET_IFNAME and NCCL_IB_HCA is set in mpi_env.py
+  if [[ "$ARNOLD_QUOTA_POOL" == "third_party_aws" ]]; then
+      echo "use aws cloud's network_config"
+      network_config="--mca pml ^cm  \
+           --mca btl_tcp_if_include eth0  \
+           -x FI_PROVIDER=efa  \
+           -x FI_EFA_FORK_SAFE=1 \
+           -x FI_EFA_USE_DEVICE_RDMA=1 \
+           -x NCCL_PROTO=simple \
+           -x LD_LIBRARY_PATH=/opt/nccl/build/lib:/usr/local/cuda/lib64:/opt/amazon/efa/lib:/opt/amazon/openmpi/lib:/opt/aws-ofi-nccl/install/lib:$LD_LIBRARY_PATH"
+  elif [[ "$ARNOLD_QUOTA_POOL" == "third_party_gcp" ]]; then
+      echo "use gcp cloud's network_config"
+      network_config="--mca btl tcp,self  \
+           --mca btl_tcp_if_include eth0  \
+           -x NCCL_FASTRAK_CTRL_DEV=eth0 \
+           -x NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 \
+           -x NCCL_SOCKET_IFNAME==eth0 \
+           -x LD_LIBRARY_PATH -x PATH \
+           -x NCCL_CROSS_NIC=0 \
+           -x NCCL_ALGO=Ring,Tree \
+           -x NCCL_PROTO=Simple \
+           -x NCCL_MIN_NCHANNELS=4 \
+           -x NCCL_DYNAMIC_CHUNK_SIZE=524288 \
+           -x NCCL_P2P_NET_CHUNKSIZE=524288 \
+           -x NCCL_P2P_PCI_CHUNKSIZE=524288 \
+           -x NCCL_P2P_NVL_CHUNKSIZE=1048576 \
+           -x NCCL_FASTRAK_NUM_FLOWS=2 \
+           -x NCCL_BUFFSIZE=8388608 \
+           -x CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+           -x NCCL_NET_GDR_LEVEL=PIX \
+           -x NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0 \
+           -x NCCL_FASTRAK_USE_SNAP=1 \
+           -x NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0 \
+           -x NCCL_FASTRAK_USE_LLCM=1 \
+           -x NCCL_FASTRAK_LLCM_DEVICE_DIRECTORY=/dev/aperture_devices \
+           -x NCCL_TUNER_PLUGIN=libnccl-tuner.so \
+           -x NCCL_TUNER_CONFIG_PATH=/usr/local/lib/a3plus_tuner_config.textproto \
+           -x NCCL_FASTRAK_DUMP_COMM_STATS=0 \
+           -x NCCL_NVLS_ENABLE=0"
+  elif [[ $ARNOLD_QUOTA_POOL == "third_party" && $RUNTIME_IDC_NAME == "hl" ]]; then
+      network_config="--mca pml ob1 \
+              --mca btl ^openib,smcuda --mca btl_tcp_if_include =bond0 \
+              --mca oob_tcp_if_include bond0 \
+              -x NCCL_IB_DISABLE=1 \
+              -x NCCL_IB_GID_INDEX=3 \
+              -x HOROVOD_MPI_THREADS_DISABLE=1"
+  else
+      if [ "$ARNOLD_RDMA_DEVICE" != "" ]; then
+          # oob_tcp is incompatible with IPv6-Only
+          if [ "$MY_HOST_IP" != "" ]; then
+              network_config="--mca pml ob1 \
+                  --mca btl ^openib,smcuda --mca btl_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
+                  --mca oob_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
+                  -x NCCL_IB_DISABLE=1 \
+                  -x HOROVOD_MPI_THREADS_DISABLE=1"
+          else
+              network_config="--mca pml ob1 \
+                  --mca btl ^openib,smcuda --mca btl_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
+                  -x NCCL_IB_DISABLE=1 \
+                  -x HOROVOD_MPI_THREADS_DISABLE=1"
+          fi
+      else
+          network_config="--mca btl ^openib,smcuda \
+              --mca btl_tcp_if_exclude docker0,lo \
+              -x NCCL_IB_DISABLE=1 \
+              -x NCCL_SOCKET_IFNAME==eth0"
+      fi
+  fi
+
+  mpi_env=`/opt/tiger/arnold/arnold_entrypoint/tools/mpi_env.py`
+
+  ### Running app, only on worker-0
+  ALLOW_ROOT=""
+  if [[ "$USER_ENV" == "root" ]]; then
+    ALLOW_ROOT="--allow-run-as-root"
+  fi
+
+  COMMON_CMD="${mapping} \
+    -hostfile ${hostfile} \
+    --mca orte_tmpdir_base /opt/tiger/openmpi_tmp \
+    ${network_config} \
+    ${PROFILER_CMD}"
+
+  if [[ "$ARNOLD_QUOTA_POOL" == "third_party_aws" ]]; then
+    PATH=/opt/amazon/openmpi/bin/:$PATH
+    MPI_HOME=/opt/amazon/openmpi
+  fi
+
+  if [[ -z ${PROFILE_SYNCER_CMD} ]]; then
+    /opt/tiger/mpi/bin/mpirun --prefix /opt/tiger/mpi ${ALLOW_ROOT} \
+      -n $process_num \
+      --npernode $ARNOLD_WORKER_GPU \
+      ${COMMON_CMD} \
+      $@ || exit 1
+  else
+    EXTRA_RANK_CMD=""
+    if [[ $process_num > 1 ]]; then
+      EXTRA_RANK_CMD=": -n $(($process_num-$ARNOLD_WORKER_NUM)) \
+        ${COMMON_CMD} ${PROFILE_SYNCER_CMD} \
+        $@"
+    fi
+    /opt/tiger/mpi/bin/mpirun --prefix /opt/tiger/mpi  ${ALLOW_ROOT} \
+      --map-by node \
+      -n $ARNOLD_WORKER_NUM ${COMMON_CMD} $@ \
+      ${EXTRA_RANK_CMD} || exit 1
+  fi
+fi
+
+date
