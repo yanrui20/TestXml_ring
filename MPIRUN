@@ -22,12 +22,12 @@ if [ ! -z "$ARNOLD_SCHEDULER_HOSTS" ]; then
 else
   set -x
 
-  echo "=== Arnold MPI/Hrovod entry script ==="
+  echo "=== Arnold MPI/Horovod entry script ==="
   echo "=== contact:  zhuyibo@bytedance.com ==="
 
   ### prepare basic env
   role=$ARNOLD_ROLE
-  
+
   # if the role is not worker, run the original code and return
   if [[ "$role" != "worker" ]]; then
     $@ || exit 1
@@ -148,7 +148,7 @@ else
       mapping="-bind-to none"
   else
     if [[ $ARNOLD_WORKER_GPU -eq 8 ]]; then
-        mapping="-bind-to none"
+        mapping="-bind-to socket"
     else
         mapping="-bind-to none"
     fi
@@ -198,7 +198,7 @@ else
       network_config="--mca pml ob1 \
               --mca btl ^openib,smcuda --mca btl_tcp_if_include =bond0 \
               --mca oob_tcp_if_include bond0 \
-              -x NCCL_IB_DISABLE=1 \
+              -x NCCL_IB_DISABLE=0 \
               -x NCCL_IB_GID_INDEX=3 \
               -x HOROVOD_MPI_THREADS_DISABLE=1"
   else
@@ -208,12 +208,12 @@ else
               network_config="--mca pml ob1 \
                   --mca btl ^openib,smcuda --mca btl_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
                   --mca oob_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
-                  -x NCCL_IB_DISABLE=1 \
+                  -x NCCL_IB_DISABLE=0 \
                   -x HOROVOD_MPI_THREADS_DISABLE=1"
           else
               network_config="--mca pml ob1 \
                   --mca btl ^openib,smcuda --mca btl_tcp_if_include ${NCCL_SOCKET_IFNAME#=} \
-                  -x NCCL_IB_DISABLE=1 \
+                  -x NCCL_IB_DISABLE=0 \
                   -x HOROVOD_MPI_THREADS_DISABLE=1"
           fi
       else
@@ -235,6 +235,8 @@ else
   COMMON_CMD="${mapping} \
     -hostfile ${hostfile} \
     --mca orte_tmpdir_base /opt/tiger/openmpi_tmp \
+    -x NCCL_DEBUG=INFO \
+    ${mpi_env} \
     ${network_config} \
     ${PROFILER_CMD}"
 
@@ -256,7 +258,7 @@ else
         ${COMMON_CMD} ${PROFILE_SYNCER_CMD} \
         $@"
     fi
-    /opt/tiger/mpi/bin/mpirun --prefix /opt/tiger/mpi  ${ALLOW_ROOT} \
+    /opt/tiger/mpi/bin/mpirun --prefix /opt/tiger/mpi ${ALLOW_ROOT} \
       --map-by node \
       -n $ARNOLD_WORKER_NUM ${COMMON_CMD} $@ \
       ${EXTRA_RANK_CMD} || exit 1
