@@ -1,4 +1,4 @@
-<algo name="allgather_ring_4channelsperring" proto="Simple" nchannels="16" nchunksperloop="64" ngpus="16" coll="allgather" inplace="1">
+<algo name="allgather_ring_4channelsperring" proto="Simple" nchannels="16" nchunksperloop="64" ngpus="16" coll="allgather" inplace="1" outofplace="0" minBytes="0" maxBytes="0">
   <gpu id="0" i_chunks="0" o_chunks="64" s_chunks="0">
     <tb id="0" send="1" recv="15" chan="0">
       <step s="0" type="s" srcbuf="o" srcoff="0" dstbuf="o" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0"/>
