@@ -1,4 +1,4 @@
-<algo name="all_gather_neogen" proto="Simple" nchannels="1" nchunksperloop="16" ngpus="16" coll="allgather" inplace="1" outofplace="0" minBytes="0" maxBytes="0">
+<algo name="all_gather_neogen" proto="Simple" nchannels="2" nchunksperloop="32" ngpus="16" coll="allgather" inplace="1" outofplace="0" minBytes="0" maxBytes="0">
   <gpu id="0" i_chunks="0" o_chunks="32" s_chunks="0">
     <tb id="0" send="-1" recv="1" chan="0">
       <step s="0" type="r" srcbuf="o" srcoff="1" dstbuf="o" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="1" />
