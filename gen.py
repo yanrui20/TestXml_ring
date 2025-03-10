@@ -52,13 +52,17 @@ if __name__ == '__main__':
     for entry in os.scandir(xml_dir):
         if entry.is_dir() and entry.name.startswith('ring') and "test" not in entry.name:
             neogen_dirs.append(entry.path)
-    for algo_dir in neogen_dirs:
+    for input_dir in neogen_dirs:
         for ins in INS:
-            new_dir = f"{algo_dir}_test_{ins}ins"
-            os.makedirs(new_dir, exist_ok=True)
-            input = [file for file in Path(algo_dir).iterdir() if file.is_file()]
+            output_dir = f"{input_dir}_test_{ins}ins"
+            os.makedirs(output_dir, exist_ok=True)
+            input = [file for file in Path(input_dir).iterdir() if file.is_file()]
             input = input[0]
-            output = f"{new_dir}/modified.xml"
+            output = [file for file in Path(output_dir).iterdir() if file.is_file()]
+            if len(output) > 0:
+                output = output[0]
+            else:
+                output = f"{output_dir}/modified.xml"
             modify_xml(
                 input_file=input, 
                 output_file=output, 
