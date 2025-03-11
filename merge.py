@@ -3,19 +3,24 @@ from copy import deepcopy
 import os
 from pathlib import Path
 
-def get_new_tb(tb, tb_index, chan, o_chunks):
+def get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks):
     new_tb = deepcopy(tb)
     # 修改chan
     new_tb.set('chan', str(chan)) # 合并的这一份chan都是1
     # 修改id
     new_tb.set('id', str(tb_index))
-    # 修改srcoff和dstoff
+    # 修改steps
     for step in new_tb.findall('step'):
+        # 修改srcoff和dstoff
         for attr in ['srcoff', 'dstoff']:
             srcbuf = step.get("srcbuf")
             if srcbuf == 'o':
                 value = int(step.get(attr))
                 step.set(attr, str(value + o_chunks * chan))
+        # 修改depid
+        depid = int(step.get("depid"))
+        if depid >= 0:
+            step.set("depid", str(depid + tb_start_index))
     return new_tb
 
 def merge_xml(input1, input2, output, instance):
@@ -42,8 +47,9 @@ def merge_xml(input1, input2, output, instance):
                 original_tbs[1] = gpu2.findall('tb')
         ## 按照次序合并tb
         for chan in range(1, instance):
+            tb_start_index = tb_index
             for tb in original_tbs[chan % 2]:
-                new_tb = get_new_tb(tb, tb_index, chan, o_chunks)
+                new_tb = get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks)
                 tb_index += 1
                 gpu.append(new_tb)
      
@@ -57,13 +63,14 @@ if __name__ == '__main__':
         "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs/ring4_2_2_2/ring_2hosts_32nodes_4_2_2_2.xml",
     ]
     output_dir = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_Merge"
+    INS = [2, 4, 8, 16]
     for index1 in range(len(inputs)):
         for index2 in range(index1+1, len(inputs)):
             input1 = inputs[index1]
             input2 = inputs[index2]
             name1 = input1.split("/")[-2]
             name2 = input2.split("/")[-2]
-            for instance in [2, 4, 8, 16]:
+            for instance in INS:
                 output = f"{output_dir}/merged_{name1}_{name2}_ins_{instance}/merged.xml"
                 os.makedirs(os.path.dirname(output), exist_ok=True)
                 merge_xml(
