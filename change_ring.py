@@ -41,6 +41,7 @@ def change_ring(input_file, output_file, ring):
     tree.write(output_file, encoding='UTF-8', xml_declaration=False)
 
 def merge_ring(inputs, output, instance):
+    assert instance % len(inputs) == 0, "instance should be divisible by the number of inputs"
     tree1 = ET.parse(inputs[0])
     root1 = tree1.getroot()
 
@@ -95,8 +96,8 @@ def dump_base_rings():
 if __name__ == "__main__":
     # dump_base_rings()
     dir_path = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_merge_sccl_sim_nccl"
-    base_ring = [0, 3]
-    instance = 8
+    base_ring = [0, 2, 4, 6]
+    instance = 16
     inputs = [
         f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring
     ]
