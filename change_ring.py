@@ -96,8 +96,9 @@ if __name__ == "__main__":
     # dump_base_rings()
     dir_path = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_merge_sccl_sim_nccl"
     base_ring = [0, 3]
+    instance = 8
     inputs = [
         f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring
     ]
-    output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}/test.xml"
-    merge_ring(inputs=inputs, output=output, instance=8)
+    output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}/test.xml"
+    merge_ring(inputs=inputs, output=output, instance=instance)
