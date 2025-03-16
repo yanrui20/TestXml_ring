@@ -3,6 +3,9 @@ from copy import deepcopy
 import os
 from gen import multi_instance
 
+MAX_RECV = 32
+MAX_STEP = 64
+
 class PipelineFunc():
     def __init__(self, head_func, tail_func):
         self.is_first_head = head_func
@@ -13,6 +16,7 @@ class _tb():
         self.xml_node = deepcopy(tb)
         self.is_first_head = func.is_first_head(gpu_id, tb)
         self.is_first_tail = func.is_first_tail(gpu_id, tb)
+        self.is_recv = int(tb.get('recv')) >= 0
 
 def get_new_wait_step(step_id, depid, deps):
     template = '<step s="0" type="nop" srcbuf="i" srcoff="-1" dstbuf="o" dstoff="-1" cnt="0" depid="8" deps="0" hasdep="0"/>'
@@ -82,10 +86,25 @@ def how_many_steps_need_append(gpu):
                     break
     return num_append_steps
 
+def get_depid_deps(depid, deps, pp_index, num_append_steps, increase_depid, gpu):
+    distinct_depid = []
+    for i in increase_depid[depid][:pp_index+1]:
+        if i not in distinct_depid:
+            distinct_depid.append(i)
+    global_deps = deps + num_append_steps[depid] * pp_index
+    for dis_depid in distinct_depid:
+        num_steps = len(gpu.find(f'tb[@id="{dis_depid}"]').findall('step'))
+        if global_deps >= num_steps:
+            global_deps -= num_steps
+        else:
+            break
+    return distinct_depid[-1], global_deps
+
 # 4. 复制stages
-def get_new_pipeline_steps(tb: _tb, step_index, o_chunks, pp_index, num_append_steps, tail_steps):
+def get_new_pipeline_steps(tb: _tb, hold_tb_num, increase_depid, step_index, o_chunks, pp_index, num_append_steps, tail_steps, gpu):
     cur_tb = deepcopy(tb.xml_node)
     # 调整基础数据
+    cur_tb.set('id', str(hold_tb_num))
     cur_step_index = step_index
     for step in cur_tb.findall('step'):
         # 修改step index
@@ -101,22 +120,39 @@ def get_new_pipeline_steps(tb: _tb, step_index, o_chunks, pp_index, num_append_s
         deps = int(step.get("deps"))
         if depid >= 0: # 有依赖
             # 这里是依赖于当前pp, pp_index不为0的时候, 依赖的deps已经发生了变化
-            deps += num_append_steps[depid] * pp_index
+            depid, deps = get_depid_deps(depid, deps, pp_index, num_append_steps, increase_depid, gpu)
             step.set("deps", str(deps))
+            step.set("depid", str(depid))
     # 增加新的依赖steps
     if tb.is_first_head and pp_index != 0:
         wait_steps = tail_steps.copy()
-        # 处理tails
-        # 处理num_append_steps
         for i in range(len(wait_steps)):
             depid, deps = wait_steps[i]
-            # 这里依赖的是上一个pp，如果当前pp_index==1，则上一个stage（pp=0）的deps并没有变化
-            if pp_index > 1:
-                deps += num_append_steps[depid] * (pp_index - 1)
+            # 这里依赖的是上一个pp的tail
+            # if pp_index > 1:
+            depid, deps = get_depid_deps(depid, deps, pp_index-1, num_append_steps, increase_depid, gpu)
             wait_steps[i] = (depid, deps)
         cur_tb = add_dep_steps(cur_tb, wait_steps, step_index)
+    
+    cur_steps_num = len(cur_tb.findall("step"))
+    if step_index + cur_steps_num > MAX_STEP:
+        # recv分tb之后，分之前的最后一个和分之后的第一个需要添加依赖, recv不会是head，不用担心调用两次add_dep_steps
+        if tb.is_recv:
+            tb_index = int(tb.xml_node.get('id'))
+            depid = increase_depid[tb_index][pp_index-1]
+            last_recv_tb_xml = gpu.find(f'tb[@id="{depid}"]')
+            last_recv_step_xml = last_recv_tb_xml.findall('step')[-1]
+            last_recv_step_id = int(last_recv_step_xml.get('s'))
+            cur_tb = add_dep_steps(cur_tb, [(depid, last_recv_step_id)], step_index)
+            last_recv_step_xml.set('hasdep', '1')
 
-    return cur_tb.findall('step')
+        # 限制step index
+        s = 0
+        for step in cur_tb.findall("step"):
+            step.set("s", str(s))
+            s += 1
+
+    return cur_tb
 
 def multi_pipeline(input_file, output_file, pipeline, ppfunc):
     # 读取XML文件
@@ -134,6 +170,7 @@ def multi_pipeline(input_file, output_file, pipeline, ppfunc):
         original_tbs = gpu.findall('tb')
         tbs = []
         tail_steps = {}
+        increase_depid = {}
         for tb_xml in original_tbs:
             # 判断是否是第一个stage，以及是否是head和tail
             tb = _tb(tb_xml, gpu_id, ppfunc)
@@ -142,14 +179,30 @@ def multi_pipeline(input_file, output_file, pipeline, ppfunc):
                 tb_id = int(tb.xml_node.get('id'))
                 last_step_id = len(tb.xml_node.findall('step')) - 1
                 tail_steps = [(tb_id, last_step_id)]
+            # 维护一个全局的depid增长关系
+            tb_id = int(tb.xml_node.get('id'))
+            increase_depid[tb_id] = [tb_id]
         # 4. 复制stage
         num_append_steps = how_many_steps_need_append(gpu)
-        for tb_xml in original_tbs:
-            for pp_index in range(1, pipeline):
-                tb_index = int(tb_xml.get('id'))
+        hold_tb_num = len(tbs)
+        for pp_index in range(1, pipeline):
+            for origin_tb_index in range(len(tbs)):
+                tb_xml_index = increase_depid[origin_tb_index][-1]
+                tb_xml = gpu.find(f'tb[@id="{tb_xml_index}"]')
+                tb_copy = tbs[origin_tb_index]
                 step_index = len(tb_xml.findall('step'))
-                new_steps = get_new_pipeline_steps(tbs[tb_index], step_index, o_chunks, pp_index, num_append_steps, tail_steps)
-                tb_xml.extend(new_steps)
+                cur_tb = get_new_pipeline_steps(tb_copy, hold_tb_num, increase_depid, step_index, o_chunks, pp_index, num_append_steps, tail_steps, gpu)
+                new_steps = cur_tb.findall('step')
+                if len(new_steps) > MAX_STEP:
+                    raise ValueError(f"Too many steps in one pipeline. MAX_STEP: {MAX_STEP}, current steps: {len(cur_tb.findall('step'))}")
+                elif step_index + len(new_steps) > MAX_STEP:
+                    tb_xml = cur_tb
+                    hold_tb_num += 1
+                    gpu.append(cur_tb)
+                else:
+                    tb_xml.extend(new_steps)
+                # 更新每个pp每个tb的id关系
+                increase_depid[origin_tb_index].append(int(tb_xml.get('id')))
     # 格式化, 2个空格缩进
     ET.indent(tree, space='  ', level=0)
     # 保存修改后的文件
@@ -178,8 +231,8 @@ if __name__ == '__main__':
         tail_func=is_first_tail_ring_8_4,
     )
     input = "./Neogen_AG/32GPUs/ring8_4/ring_2hosts_32nodes_8_4.xml"
-    for pipeline in [1, 2, 4, 8]:
-        for instance in [1, 2, 4, 8, 16]:
+    for pipeline in [16, 32]:
+        for instance in [1]:
             output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_pp_{pipeline}_ins_{instance}/test.xml"
             os.makedirs(os.path.dirname(output), exist_ok=True)
             multi_pipeline(input, output, pipeline, ppfunc)
