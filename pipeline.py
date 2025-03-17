@@ -154,6 +154,26 @@ def get_new_pipeline_steps(tb: _tb, hold_tb_num, increase_depid, step_index, o_c
 
     return cur_tb
 
+class GpuInfo():
+    def __init__(self, gpu):
+        self.gpu = gpu
+        self.chunks = int(gpu.get('chunks'))
+        self.gpu_id = int(gpu.get('id'))
+        self.tbs = [] # 复制所有tb的信息
+        self.tail_steps = {} # 记录每个pp的的第一个阶段的tail tb的最后一个 step
+        self.increase_depid = {} # 维护一个全局的depid增长对应关系
+        for tb_xml in gpu.findall('tb'):
+            # 判断是否是第一个stage，以及是否是head和tail
+            tb = _tb(tb_xml, self.gpu_id, ppfunc)
+            self.tbs.append(tb)
+            if tb.is_first_tail:
+                tb_id = int(tb.xml_node.get('id'))
+                last_step_id = len(tb.xml_node.findall('step')) - 1
+                self.tail_steps = [(tb_id, last_step_id)]
+            # 维护一个全局的depid增长关系
+            tb_id = int(tb.xml_node.get('id'))
+            self.increase_depid[tb_id] = [tb_id]
+
 def multi_pipeline(input_file, output_file, pipeline, ppfunc):
     # 读取XML文件
     tree = ET.parse(input_file)
@@ -231,7 +251,7 @@ if __name__ == '__main__':
         tail_func=is_first_tail_ring_8_4,
     )
     input = "./Neogen_AG/32GPUs/ring8_4/ring_2hosts_32nodes_8_4.xml"
-    for pipeline in [16, 32]:
+    for pipeline in [16]:
         for instance in [1]:
             output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_pp_{pipeline}_ins_{instance}/test.xml"
             os.makedirs(os.path.dirname(output), exist_ok=True)
