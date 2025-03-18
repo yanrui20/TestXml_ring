@@ -110,14 +110,14 @@ def dump_base_rings():
     ring_strs += ring_inter
     for i, ring_str in enumerate(ring_strs):
         ring = [int(i) for i in ring_str.split()]
-        input = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
+        input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
 if __name__ == "__main__":
     dump_base_rings()
-    dir_path = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_merge_sccl_sim_nccl"
+    dir_path = "./Neogen_AG/32GPUs_merge_sccl_sim_nccl"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
