@@ -86,6 +86,10 @@ def dump_base_rings():
         "6 5 4 3 2 1 0 7   15 8 9 10 11 12 13 14   22 21 20 19 18 17 16 23   31 24 25 26 27 28 29 30",
         "7 0 1 2 3 4 5 6   14 13 12 11 10 9 8 15   23 16 17 18 19 20 21 22   30 29 28 27 26 25 24 31",
     ]
+    ring_inter = [
+        "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31"
+    ]
+    ring_strs += ring_inter
     for i, ring_str in enumerate(ring_strs):
         ring = [int(i) for i in ring_str.split()]
         input = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
@@ -94,9 +98,9 @@ def dump_base_rings():
         change_ring(input, output, ring)
 
 if __name__ == "__main__":
-    # dump_base_rings()
+    dump_base_rings()
     dir_path = "/Users/yanrui/vscode/nccl/TestXml_ring/Neogen_AG/32GPUs_merge_sccl_sim_nccl"
-    base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
+    base_ring = [0, 1, 3, 4, 5, 6, 7, 8]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}/test.xml"
