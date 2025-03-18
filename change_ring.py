@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 import os
 from pathlib import Path
+from gen import multi_instance
 
 def get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks):
     new_tb = deepcopy(tb)
@@ -116,7 +117,18 @@ def dump_base_rings():
         change_ring(input, output, ring)
 
 if __name__ == "__main__":
-    dump_base_rings()
+    # ins = 4
+    # input = './Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_8/test.xml'
+    # output = f'./Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_8_ins_{ins}/test.xml'
+    # os.makedirs(os.path.dirname(output), exist_ok=True)
+    # multi_instance(
+    #     input_file=input,
+    #     output_file=output,
+    #     instance=ins,
+    # )
+    # exit()
+    
+    # dump_base_rings()
     dir_path = "./Neogen_AG/32GPUs_merge_sccl_sim_nccl"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
