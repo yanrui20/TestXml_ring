@@ -133,8 +133,8 @@ if __name__ == "__main__":
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
-    inter_ring = [8, 9]
-    inter_instance = 2
+    inter_ring = [8]
+    inter_instance = 4
     inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     if inter_ring:
