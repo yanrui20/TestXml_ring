@@ -129,23 +129,22 @@ def dump_seq_base():
     ]
     rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
     rings = []
-    node = 2
+    node = 4
     for ring_in_one_node in rings_in_one_node:
         ring = ring_in_one_node.copy()
         for i in range(1, node):
             ring += [j + i * 8 for j in ring_in_one_node]
         rings.append(ring)
     for i, ring in enumerate(rings):
-        input = "./Neogen_AG/16GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_AG/16GPUs_sequence_test/base_ring_index_{i}/test.xml"
+        input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_AG/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
-    print(rings)
 
 
 if __name__ == "__main__":
     dump_seq_base()
-    dir_path = "./Neogen_AG/16GPUs_sequence_test"
+    dir_path = "./Neogen_AG/32GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
