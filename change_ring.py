@@ -155,13 +155,13 @@ if __name__ == "__main__":
     # dump_base_rings()
     dir_path = "./Neogen_AG/32GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
-    instance = 16
+    instance = 24
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
-    # inter_ring = [8, 9]
-    # inter_instance = 2
-    # inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
+    inter_ring = [8]
+    inter_instance = 2
+    inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
-    # if inter_ring:
-    #     output += f"_inter_ring_{'_'.join([str(i) for i in inter_ring])}_ins{inter_instance}"
+    if inter_ring:
+        output += f"_inter_ring_{'_'.join([str(i) for i in inter_ring])}_ins{inter_instance}"
     output += "/test.xml"
     merge_ring(inputs=inputs, output=output, instance=instance, inter_inputs=None, inter_instance=0)
