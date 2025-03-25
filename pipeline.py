@@ -22,24 +22,23 @@ def get_new_wait_step(step_id, depid, deps):
     new_step.set('deps', str(deps))
     return new_step
 
-def add_dep_steps(new_tb, wait_steps, step_index):
+def add_dep_steps(new_tb, wait_steps, start_step_index):
     # 先递增原本的step_id
     dep_num = len(wait_steps)
-    for step in new_tb.findall('step'):
-        current_s = int(step.get('s'))
-        ori_depid = int(step.get('depid'))
-        # 原本的第一个step可能需要添加最后一个wait step的依赖
-        if current_s == step_index and ori_depid == -1:
-            depid, deps = wait_steps[-1]
-            step.set('depid', str(depid))
-            step.set('deps', str(deps))
-            dep_num -= 1
-            break
+    # 原本的第一个step可能需要添加最后一个wait step的依赖
+    step = new_tb.find(f'step[@s="{start_step_index}"]')
+    ori_depid = int(step.get('depid'))
+    if ori_depid == -1:
+        depid, deps = wait_steps[-1]
+        step.set('depid', str(depid))
+        step.set('deps', str(deps))
+        dep_num -= 1
+    # 递增step_id
     for step in new_tb.findall('step'):
         current_s = int(step.get('s'))
         step.set('s', str(current_s + dep_num))
     # 插入新的wait step
-    step_id = step_index
+    step_id = start_step_index
     for wait_step in wait_steps[:dep_num]:
         depid, deps = wait_step
         new_step = get_new_wait_step(step_id, depid, deps)
@@ -118,38 +117,79 @@ def get_new_pipeline_steps(tb: _tb, step_index, o_chunks, pp_index, num_append_s
 
     return cur_tb.findall('step')
 
+def get_new_pipeline_tbs(tb_index, pp_index, gpu_info):
+    new_tb = deepcopy(gpu_info.tbs[tb_index].xml_node)
+    o_chunks = gpu_info.o_chunks
+    # 修改chan和id
+    new_tb.set('chan', str(pp_index))
+    new_tb.set('id', str(tb_index + gpu_info.num_tbs * pp_index))
+    # 修改steps
+    for step in new_tb.findall('step'):
+        # 修改srcoff和dstoff
+        for attr in ['srcoff', 'dstoff']:
+            offset = int(step.get(attr))
+            if offset != -1:
+                step.set(attr, str(offset + o_chunks * pp_index))
+        # 修改depid
+        depid = int(step.get("depid"))
+        if depid >= 0:
+            depid += gpu_info.num_tbs * pp_index
+            step.set("depid", str(depid))
+    # 增加依赖的step
+    if gpu_info.tbs[tb_index].is_first_head and pp_index != 0:
+        wait_steps = gpu_info.tail_steps.copy()
+        # 处理num_append_steps
+        for i in range(len(wait_steps)):
+            depid, deps = wait_steps[i]
+            depid += gpu_info.num_tbs * (pp_index - 1)
+            wait_steps[i] = (depid, deps)
+            # 还需要让被依赖的step的hasdep=1
+            dep_step = gpu_info.gpu.find(f'.//tb[@id="{depid}"]/step[@s="{deps}"]')
+            dep_step.set('hasdep', '1')
+        new_tb = add_dep_steps(new_tb, wait_steps, 0)
+    return new_tb
+
+class GpuInfo():
+    def __init__(self, gpu):
+        self.gpu = gpu
+        self.o_chunks = int(gpu.get('o_chunks'))
+        self.gpu_id = int(gpu.get('id'))
+        self.tbs = [] # 复制所有tb的信息
+        self.num_tbs = len(gpu.findall('tb'))
+        self.tail_steps = {} # 记录第一个阶段每个的tail tb的最后一个 step（一般来说只有一个）
+        # self.increase_depid = {} # 维护一个全局的depid增长对应关系
+        # self.num_append_steps = how_many_steps_need_append(gpu)
+        for tb_xml in gpu.findall('tb'):
+            # 判断是否是第一个stage，以及是否是head和tail
+            tb = _tb(tb_xml, self.gpu_id, ppfunc)
+            self.tbs.append(tb)
+            if tb.is_first_tail:
+                tb_id = int(tb.xml_node.get('id'))
+                last_step_id = len(tb.xml_node.findall('step')) - 1
+                self.tail_steps = [(tb_id, last_step_id)]
+            # # 维护一个全局的depid增长关系
+            # tb_id = int(tb.xml_node.get('id'))
+            # self.increase_depid[tb_id] = [tb_id]
+
 def multi_pipeline(input_file, output_file, pipeline, ppfunc):
     # 读取XML文件
     tree = ET.parse(input_file)
     root = tree.getroot()
-    # 1. 处理root的nchunksperloop
+    # 1. 处理root的nchunksperloop和nchannels
     nchunksperloop = int(root.get("nchunksperloop"))
     root.set("nchunksperloop", str(nchunksperloop * pipeline))
+    nchannels = int(root.get("nchannels"))
+    root.set("nchannels", str(nchannels * pipeline))
     for gpu in root.findall('.//gpu'):
-        # 2. 要处理gpu标签的o_chunks
-        o_chunks = int(gpu.get('o_chunks'))
-        gpu.set('o_chunks', str(o_chunks*pipeline))
-        # 复制并处理所有tb标签
-        gpu_id = int(gpu.get('id'))
-        original_tbs = gpu.findall('tb')
-        tbs = []
-        tail_steps = {}
-        for tb_xml in original_tbs:
-            # 判断是否是第一个stage，以及是否是head和tail
-            tb = _tb(tb_xml, gpu_id, ppfunc)
-            tbs.append(tb)
-            if tb.is_first_tail:
-                tb_id = int(tb.xml_node.get('id'))
-                last_step_id = len(tb.xml_node.findall('step')) - 1
-                tail_steps = [(tb_id, last_step_id)]
-        # 4. 复制stage
-        num_append_steps = how_many_steps_need_append(gpu)
-        for tb_xml in original_tbs:
-            for pp_index in range(1, pipeline):
-                tb_index = int(tb_xml.get('id'))
-                step_index = len(tb_xml.findall('step'))
-                new_steps = get_new_pipeline_steps(tbs[tb_index], step_index, o_chunks, pp_index, num_append_steps, tail_steps)
-                tb_xml.extend(new_steps)
+        # 2. 复制GPU信息
+        gpu_info = GpuInfo(gpu)
+        # 3. 要处理gpu标签的o_chunks属性
+        gpu.set('o_chunks', str(gpu_info.o_chunks*pipeline))
+        # 4. 复制tb
+        for pp_index in range(1, pipeline):
+            for tb_index in range(len(gpu_info.tbs)):
+                new_tb = get_new_pipeline_tbs(tb_index, pp_index, gpu_info)
+                gpu.append(new_tb)
     # 格式化, 2个空格缩进
     ET.indent(tree, space='  ', level=0)
     # 保存修改后的文件
@@ -178,9 +218,7 @@ if __name__ == '__main__':
         tail_func=is_first_tail_ring_8_4,
     )
     input = "./Neogen_AG/32GPUs/ring8_4/ring_2hosts_32nodes_8_4.xml"
-    for pipeline in [1, 2, 4, 8, 16, 32]:
-        for instance in [1, 2, 4, 8, 16]:
-            output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_pp_{pipeline}_ins_{instance}/test.xml"
-            os.makedirs(os.path.dirname(output), exist_ok=True)
-            multi_pipeline(input, output, pipeline, ppfunc)
-            multi_instance(output, output, instance)
+    for pipeline in [2, 4, 8, 16]:
+        output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_multi_chan_pp_{pipeline}_ins_1/test.xml"
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        multi_pipeline(input, output, pipeline, ppfunc)
