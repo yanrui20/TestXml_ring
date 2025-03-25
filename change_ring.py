@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 import os
 from pathlib import Path
-from gen import multi_instance
+from gen import multi_copy
 
 def get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks):
     new_tb = deepcopy(tb)
@@ -116,20 +116,46 @@ def dump_base_rings():
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
+def dump_seq_base():
+    ring_one_node_str = [
+        "0 7 6 5 4 3 2 1",
+        "1 0 7 6 5 4 3 2",
+        "2 1 0 7 6 5 4 3",
+        "3 2 1 0 7 6 5 4",
+        "4 3 2 1 0 7 6 5",
+        "5 4 3 2 1 0 7 6",
+        "6 5 4 3 2 1 0 7",
+        "7 6 5 4 3 2 1 0",
+    ]
+    rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
+    rings = []
+    node = 2
+    for ring_in_one_node in rings_in_one_node:
+        ring = ring_in_one_node.copy()
+        for i in range(1, node):
+            ring += [j + i * 8 for j in ring_in_one_node]
+        rings.append(ring)
+    for i, ring in enumerate(rings):
+        input = "./Neogen_AG/16GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_AG/16GPUs_sequence_test/base_ring_index_{i}/test.xml"
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        change_ring(input, output, ring)
+    print(rings)
+
+
 if __name__ == "__main__":
-    # ins = 4
-    # input = './Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_8/test.xml'
-    # output = f'./Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_8_ins_{ins}/test.xml'
-    # os.makedirs(os.path.dirname(output), exist_ok=True)
-    # multi_instance(
-    #     input_file=input,
-    #     output_file=output,
-    #     instance=ins,
-    # )
-    # exit()
-    
+    dump_seq_base()
+    dir_path = "./Neogen_AG/16GPUs_sequence_test"
+    base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
+    instance = 16
+    inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
+    output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
+    output += "/test.xml"
+    merge_ring(inputs=inputs, output=output, instance=instance)
+    exit()
+
     # dump_base_rings()
-    dir_path = "./Neogen_AG/32GPUs_merge_sccl_sim_nccl"
+    dir_path = "./Neogen_AG/16GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
