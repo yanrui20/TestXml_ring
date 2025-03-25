@@ -221,6 +221,8 @@ if __name__ == '__main__':
     input = "./Neogen_AG/32GPUs/ring8_4/ring_2hosts_32nodes_8_4.xml"
     for pipeline in [2, 4, 8, 16]:
         for ins in [1, 2, 4, 8]:
+            if pipeline * ins >= 64:
+                continue
             output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_multi_chan_pp_{pipeline}_ins_{ins}/test.xml"
             os.makedirs(os.path.dirname(output), exist_ok=True)
             multi_pipeline(input, output, pipeline, ppfunc)
