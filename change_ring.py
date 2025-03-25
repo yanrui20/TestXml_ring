@@ -127,6 +127,10 @@ def dump_seq_base():
         "6 5 4 3 2 1 0 7",
         "7 6 5 4 3 2 1 0",
     ]
+    ring_inter = [
+        "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31",
+        "31 23 15 7  30 22 14 6  29 21 13 5  28 20 12 4  27 19 11 3  26 18 10 2  25 17 9 1  24 16 8 0"
+    ]
     rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
     rings = []
     node = 4
@@ -135,35 +139,26 @@ def dump_seq_base():
         for j in range(1, node):
             ring += [k + j * 8 for k in rings_in_one_node[(i+j)%8]]
         rings.append(ring)
+    for ring in ring_inter:
+        ring = [int(i) for i in ring.split()]
+        rings.append(ring)
+    for ring in rings:
+        print(ring)
     for i, ring in enumerate(rings):
         input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
         output = f"./Neogen_AG/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
-    for ring in rings:
-        print(ring)
-
 
 if __name__ == "__main__":
     dump_seq_base()
+    # dump_base_rings()
     dir_path = "./Neogen_AG/32GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
-    # inter_ring = [8]
-    # inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
-    output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
-    output += "/test.xml"
-    merge_ring(inputs=inputs, output=output, instance=instance)
-    exit()
-
-    # dump_base_rings()
-    dir_path = "./Neogen_AG/16GPUs_sequence_test"
-    base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
-    instance = 16
-    inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     inter_ring = [8]
-    inter_instance = 4
+    inter_instance = 2
     inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     if inter_ring:
