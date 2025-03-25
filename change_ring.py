@@ -53,6 +53,7 @@ def merge_ring(inputs, output, instance, inter_inputs=None, inter_instance=0):
     root1.set("nchannels", str(nchannels * (instance+inter_instance)))
     nchunksperloop = int(root1.get("nchunksperloop"))
     root1.set("nchunksperloop", str(nchunksperloop * (instance+inter_instance)))
+    root1.set("outofplace", str(1))
 
     trees = [ET.parse(input) for input in inputs[1:]]
     roots = [tree.getroot() for tree in trees]
@@ -158,10 +159,10 @@ if __name__ == "__main__":
     instance = 24
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     inter_ring = [8]
-    inter_instance = 2
+    inter_instance = 3
     inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     if inter_ring:
         output += f"_inter_ring_{'_'.join([str(i) for i in inter_ring])}_ins{inter_instance}"
     output += "/test.xml"
-    merge_ring(inputs=inputs, output=output, instance=instance, inter_inputs=None, inter_instance=0)
+    merge_ring(inputs=inputs, output=output, instance=instance, inter_inputs=inter_inputs, inter_instance=inter_instance)
