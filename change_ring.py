@@ -143,8 +143,6 @@ def dump_seq_base():
     for ring in ring_inter:
         ring = [int(i) for i in ring.split()]
         rings.append(ring)
-    for ring in rings:
-        print(ring)
     for i, ring in enumerate(rings):
         input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
         output = f"./Neogen_AG/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
@@ -156,10 +154,10 @@ if __name__ == "__main__":
     # dump_base_rings()
     dir_path = "./Neogen_AG/32GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
-    instance = 24
+    instance = 48
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     inter_ring = [8]
-    inter_instance = 3
+    inter_instance = 6
     inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     if inter_ring:
