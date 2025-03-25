@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 from copy import deepcopy
 import os
-from gen import multi_instance
+from gen import multi_copy
 
 class PipelineFunc():
     def __init__(self, head_func, tail_func):
@@ -150,7 +150,7 @@ def get_new_pipeline_tbs(tb_index, pp_index, gpu_info):
     return new_tb
 
 class GpuInfo():
-    def __init__(self, gpu):
+    def __init__(self, gpu, ppfunc):
         self.gpu = gpu
         self.o_chunks = int(gpu.get('o_chunks'))
         self.gpu_id = int(gpu.get('id'))
@@ -180,9 +180,10 @@ def multi_pipeline(input_file, output_file, pipeline, ppfunc):
     root.set("nchunksperloop", str(nchunksperloop * pipeline))
     nchannels = int(root.get("nchannels"))
     root.set("nchannels", str(nchannels * pipeline))
+    root.set("outofplace", str(1))
     for gpu in root.findall('.//gpu'):
         # 2. 复制GPU信息
-        gpu_info = GpuInfo(gpu)
+        gpu_info = GpuInfo(gpu, ppfunc)
         # 3. 要处理gpu标签的o_chunks属性
         gpu.set('o_chunks', str(gpu_info.o_chunks*pipeline))
         # 4. 复制tb
