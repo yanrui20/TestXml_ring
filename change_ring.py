@@ -130,16 +130,18 @@ def dump_seq_base():
     rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
     rings = []
     node = 4
-    for ring_in_one_node in rings_in_one_node:
-        ring = ring_in_one_node.copy()
-        for i in range(1, node):
-            ring += [j + i * 8 for j in ring_in_one_node]
+    for i in range(8):
+        ring = rings_in_one_node[i].copy()
+        for j in range(1, node):
+            ring += [k + j * 8 for k in rings_in_one_node[(i+j)%8]]
         rings.append(ring)
     for i, ring in enumerate(rings):
         input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
         output = f"./Neogen_AG/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
+    for ring in rings:
+        print(ring)
 
 
 if __name__ == "__main__":
@@ -148,6 +150,8 @@ if __name__ == "__main__":
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
+    # inter_ring = [8]
+    # inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     output += "/test.xml"
     merge_ring(inputs=inputs, output=output, instance=instance)
