@@ -220,6 +220,8 @@ if __name__ == '__main__':
     )
     input = "./Neogen_AG/32GPUs/ring8_4/ring_2hosts_32nodes_8_4.xml"
     for pipeline in [2, 4, 8, 16]:
-        output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_multi_chan_pp_{pipeline}_ins_1/test.xml"
-        os.makedirs(os.path.dirname(output), exist_ok=True)
-        multi_pipeline(input, output, pipeline, ppfunc)
+        for ins in [1, 2, 4, 8]:
+            output = f"./Neogen_AG/32GPUs_pipeline/ring_8_4_multi_chan_pp_{pipeline}_ins_{ins}/test.xml"
+            os.makedirs(os.path.dirname(output), exist_ok=True)
+            multi_pipeline(input, output, pipeline, ppfunc)
+            multi_copy(output, output, ins)
