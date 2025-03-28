@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from gen import multi_copy
 
+TYPE = "AG"
+
 def get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks):
     new_tb = deepcopy(tb)
     # 修改chan
@@ -112,8 +114,8 @@ def dump_base_rings():
     ring_strs += ring_inter
     for i, ring_str in enumerate(ring_strs):
         ring = [int(i) for i in ring_str.split()]
-        input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_AG/32GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
+        input = f"./Neogen_{TYPE}/32GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_{TYPE}/32GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
@@ -144,20 +146,21 @@ def dump_seq_base():
         ring = [int(i) for i in ring.split()]
         rings.append(ring)
     for i, ring in enumerate(rings):
-        input = "./Neogen_AG/32GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_AG/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
+        input = f"./Neogen_{TYPE}/32GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_{TYPE}/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
 if __name__ == "__main__":
+    TYPE = "RS"
     dump_seq_base()
     # dump_base_rings()
-    dir_path = "./Neogen_AG/32GPUs_sequence_test"
+    dir_path = f"./Neogen_{TYPE}/32GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
-    instance = 32
+    instance = 40
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     inter_ring = [8]
-    inter_instance = 4
+    inter_instance = 5
     inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
     output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}"
     if inter_ring:
