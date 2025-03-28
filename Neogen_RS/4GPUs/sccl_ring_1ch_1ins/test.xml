@@ -1,0 +1,34 @@
+<algo name="reducescatter_ring_1channelsperring" proto="Simple" nchannels="1" nchunksperloop="4" ngpus="4" coll="reduce_scatter" inplace="1" outofplace="1" minBytes="0" maxBytes="0">
+  <gpu id="0" i_chunks="4" o_chunks="0" s_chunks="0">
+    <tb id="0" send="1" recv="3" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="3" dstbuf="i" dstoff="3" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="1" type="rrcs" srcbuf="i" srcoff="2" dstbuf="i" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="2" type="rrcs" srcbuf="i" srcoff="1" dstbuf="i" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="3" type="rrc" srcbuf="i" srcoff="0" dstbuf="i" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0" />
+    </tb>
+  </gpu>
+  <gpu id="1" i_chunks="4" o_chunks="0" s_chunks="0">
+    <tb id="0" send="2" recv="0" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="0" dstbuf="i" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="1" type="rrcs" srcbuf="i" srcoff="3" dstbuf="i" dstoff="3" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="2" type="rrcs" srcbuf="i" srcoff="2" dstbuf="i" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="3" type="rrc" srcbuf="i" srcoff="1" dstbuf="i" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0" />
+    </tb>
+  </gpu>
+  <gpu id="2" i_chunks="4" o_chunks="0" s_chunks="0">
+    <tb id="0" send="3" recv="1" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="1" dstbuf="i" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="1" type="rrcs" srcbuf="i" srcoff="0" dstbuf="i" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="2" type="rrcs" srcbuf="i" srcoff="3" dstbuf="i" dstoff="3" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="3" type="rrc" srcbuf="i" srcoff="2" dstbuf="i" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0" />
+    </tb>
+  </gpu>
+  <gpu id="3" i_chunks="4" o_chunks="0" s_chunks="0">
+    <tb id="0" send="0" recv="2" chan="0">
+      <step s="0" type="s" srcbuf="i" srcoff="2" dstbuf="i" dstoff="2" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="1" type="rrcs" srcbuf="i" srcoff="1" dstbuf="i" dstoff="1" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="2" type="rrcs" srcbuf="i" srcoff="0" dstbuf="i" dstoff="0" cnt="1" depid="-1" deps="-1" hasdep="0" />
+      <step s="3" type="rrc" srcbuf="i" srcoff="3" dstbuf="i" dstoff="3" cnt="1" depid="-1" deps="-1" hasdep="0" />
+    </tb>
+  </gpu>
+</algo>
