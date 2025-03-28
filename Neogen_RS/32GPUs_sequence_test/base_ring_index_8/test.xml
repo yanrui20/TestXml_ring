@@ -1,4 +1,4 @@
-<algo name="reducescatter_ring_1channelsperring" proto="Simple" nchannels="1" nchunksperloop="32" ngpus="32" coll="reduce_scatter" inplace="1" outofplace="1" minBytes="0" maxBytes="0">
+<algo name="reducescatter_ring_1channelsperring" proto="Simple" nchannels="1" nchunksperloop="32" ngpus="32" coll="reducescatter" inplace="1" outofplace="1" minBytes="0" maxBytes="0">
   <gpu id="0" i_chunks="32" o_chunks="0" s_chunks="0">
     <tb id="0" send="8" recv="31" chan="0">
       <step s="0" type="s" srcbuf="i" srcoff="31" dstbuf="i" dstoff="31" cnt="1" depid="-1" deps="-1" hasdep="0" />
