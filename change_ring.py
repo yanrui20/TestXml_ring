@@ -175,7 +175,7 @@ if __name__ == "__main__":
     dir_path = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_merge_sccl_sim_nccl"
     # dump_seq_base()
     # dir_path = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_sequence_test"
-    base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
+    base_ring = [0, 1, 2, 3,]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
     inter_ring = None
