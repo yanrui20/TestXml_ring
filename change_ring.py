@@ -5,6 +5,17 @@ from pathlib import Path
 from gen import multi_copy
 
 TYPE = "AG"
+NUMGPUS = 32
+
+ring_inter = {
+    32: [
+    "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31",
+    "31 23 15 7  30 22 14 6  29 21 13 5  28 20 12 4  27 19 11 3  26 18 10 2  25 17 9 1  24 16 8 0"
+],
+    16: [
+    "0 8  1 9  2 10  3 11  4 12  5 13  6 14  7 15",
+    "15 7  14 6  13 5  12 4  11 3  10 2  9 1  8 0"
+],}
 
 def get_new_tb(tb, tb_index, tb_start_index, chan, o_chunks):
     new_tb = deepcopy(tb)
@@ -107,15 +118,11 @@ def dump_base_rings():
         "6 5 4 3 2 1 0 7   15 8 9 10 11 12 13 14   22 21 20 19 18 17 16 23   31 24 25 26 27 28 29 30",
         "7 0 1 2 3 4 5 6   14 13 12 11 10 9 8 15   23 16 17 18 19 20 21 22   30 29 28 27 26 25 24 31",
     ]
-    ring_inter = [
-        "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31",
-        "31 23 15 7  30 22 14 6  29 21 13 5  28 20 12 4  27 19 11 3  26 18 10 2  25 17 9 1  24 16 8 0"
-    ]
-    ring_strs += ring_inter
+    ring_strs += ring_inter[NUMGPUS]
     for i, ring_str in enumerate(ring_strs):
         ring = [int(i) for i in ring_str.split()]
-        input = f"./Neogen_{TYPE}/32GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_{TYPE}/32GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
+        input = f"./Neogen_{TYPE}/{NUMGPUS}GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_merge_sccl_sim_nccl/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
@@ -130,32 +137,29 @@ def dump_seq_base():
         "6 5 4 3 2 1 0 7",
         "7 6 5 4 3 2 1 0",
     ]
-    ring_inter = [
-        "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31",
-        "31 23 15 7  30 22 14 6  29 21 13 5  28 20 12 4  27 19 11 3  26 18 10 2  25 17 9 1  24 16 8 0"
-    ]
     rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
     rings = []
-    node = 4
+    node = NUMGPUS // 8
     for i in range(8):
         ring = rings_in_one_node[i].copy()
         for j in range(1, node):
             ring += [k + j * 8 for k in rings_in_one_node[(i+j)%8]]
         rings.append(ring)
-    for ring in ring_inter:
+    for ring in ring_inter[NUMGPUS]:
         ring = [int(i) for i in ring.split()]
         rings.append(ring)
     for i, ring in enumerate(rings):
-        input = f"./Neogen_{TYPE}/32GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_{TYPE}/32GPUs_sequence_test/base_ring_index_{i}/test.xml"
+        input = f"./Neogen_{TYPE}/{NUMGPUS}GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
 if __name__ == "__main__":
-    TYPE = "RS"
+    TYPE = "AG"
+    NUMGPUS = 16
     dump_seq_base()
     # dump_base_rings()
-    dir_path = f"./Neogen_{TYPE}/32GPUs_sequence_test"
+    dir_path = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_sequence_test"
     base_ring = [0, 1, 2, 3, 4, 5, 6, 7]
     instance = 16
     inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
