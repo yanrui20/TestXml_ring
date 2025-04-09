@@ -289,9 +289,9 @@ def heterogeneous_channel(coll, dims, channels):
 
 if __name__ == "__main__":
     dims = [8, 2]
-    channels = [8, 16]
+    channels = [16, 4]
     root = heterogeneous_channel(coll=AG, dims=dims, channels=channels)
-    root.show_xml()
+    # root.show_xml()
     gpus = math.prod(dims)
     file = f"./yccl_AG/{gpus}GPUs/ring_{"_".join([str(i) for i in dims])}" \
         f"_channel_{"_".join([str(i) for i in channels])}/yccl_test.xml"
