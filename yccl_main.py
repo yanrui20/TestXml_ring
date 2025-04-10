@@ -1,5 +1,5 @@
 import math
-from yccl_lang import *
+from yccl import *
 
 if __name__ == "__main__":
     dims = [8, 2]
