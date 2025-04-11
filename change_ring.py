@@ -8,6 +8,18 @@ TYPE = "AG"
 NUMGPUS = 32
 
 ring_inter = {
+    512: [
+        " ".join(str(i + j*8) for i in range(8) for j in range(512//8)),
+    ],
+    256: [
+        " ".join(str(i + j*8) for i in range(8) for j in range(256//8)),
+    ],
+    128: [
+        " ".join(str(i + j*8) for i in range(8) for j in range(128//8)),
+    ],
+    64: [
+        " ".join(str(i + j*8) for i in range(8) for j in range(64//8)),
+    ],
     32: [
     "0 8 16 24  1 9 17 25  2 10 18 26  3 11 19 27  4 12 20 28  5 13 21 29  6 14 22 30  7 15 23 31",
     "31 23 15 7  30 22 14 6  29 21 13 5  28 20 12 4  27 19 11 3  26 18 10 2  25 17 9 1  24 16 8 0"
@@ -148,7 +160,7 @@ def dump_base_rings():
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
-def dump_seq_base():
+def dump_seq_base(ngpus=NUMGPUS):
     ring_one_node_str = [
         "0 7 6 5 4 3 2 1",
         "1 0 7 6 5 4 3 2",
@@ -161,22 +173,47 @@ def dump_seq_base():
     ]
     rings_in_one_node = [[int(i) for i in ring_str.split()] for ring_str in ring_one_node_str]
     rings = []
-    node = NUMGPUS // 8
+    node = ngpus // 8
     for i in range(8):
         ring = rings_in_one_node[i].copy()
         for j in range(1, node):
             ring += [k + j * 8 for k in rings_in_one_node[(i+j)%8]]
         rings.append(ring)
-    for ring in ring_inter[NUMGPUS]:
+    for ring in ring_inter[ngpus]:
         ring = [int(i) for i in ring.split()]
         rings.append(ring)
     for i, ring in enumerate(rings):
-        input = f"./Neogen_{TYPE}/{NUMGPUS}GPUs/sccl_ring_1ch_1ins/test.xml"
-        output = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_sequence_test/base_ring_index_{i}/test.xml"
+        input = f"./Neogen_{TYPE}/{ngpus}GPUs/sccl_ring_1ch_1ins/test.xml"
+        output = f"./Neogen_{TYPE}/{ngpus}GPUs_sequence_test/base_ring_index_{i}/test.xml"
         os.makedirs(os.path.dirname(output), exist_ok=True)
         change_ring(input, output, ring)
 
+def large_world_9_ring():
+    TYPE = "AG"
+    base_ring = [0,1,2,3,4,5,6,7]
+    inter_ring = [8]
+    ## ngpus, instance, 9ring
+    for ngpus in [64, 128, 256, 512]: # 
+        NUMGPUS = ngpus
+        dump_seq_base(NUMGPUS)
+        # dump_base_rings()
+        dir_path = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_sequence_test"
+        # dir_path = f"./Neogen_{TYPE}/{NUMGPUS}GPUs_merge_sccl_sim_nccl"
+        inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in base_ring]
+        for ins in [1, 2, 3, 4, 5]:
+            instance = 8 * ins
+            inter_instance = ins
+
+            inter_inputs = [f"{dir_path}/base_ring_index_{i}/test.xml" for i in inter_ring]
+            output = f"{dir_path}/merged_ring_{'_'.join([str(i) for i in base_ring])}_ins{instance}" \
+                    f"_inter_ring_{'_'.join([str(i) for i in inter_ring])}_ins{inter_instance}" \
+                    "/test.xml"
+            merge_ring(inputs=inputs, output=output, instance=instance, inter_inputs=inter_inputs, inter_instance=inter_instance)
+
+
 if __name__ == "__main__":
+    large_world_9_ring()
+    exit()
     TYPE = "AG"
     NUMGPUS = 16
     dump_base_rings()
