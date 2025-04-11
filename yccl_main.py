@@ -3,7 +3,7 @@ from yccl import *
 
 if __name__ == "__main__":
     dims = [8, 2]
-    channels = [32, 16]
+    channels = [16, 4]
     # root = heterogeneous_channel_ring(coll=AG, dims=dims, channels=channels)
     root = heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll=AG, dims=dims, channels=channels)
     # root.show_xml()

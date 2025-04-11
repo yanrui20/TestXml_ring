@@ -45,9 +45,10 @@ def heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll, dims, channels):
                     copy(algo, src, dst, channel_id)
         # 7->0,1->2,3->4,5->6 反向回传
         chunk_size = one_data_count * (dims[0]-1)
-        assert chunk_size % channels[1] == 0
-        count = chunk_size // channels[1]
-        for channel_id in range(channels[1]):
+        this_chan = 1
+        assert chunk_size % this_chan == 0
+        count = chunk_size // this_chan
+        for channel_id in range(this_chan):
             for index in range(1, ngpus, 2):
                 src_rank = (index + 1) % dims[1] + index // dims[1] * dims[1]
                 dst_rank = index
