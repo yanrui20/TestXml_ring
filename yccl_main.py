@@ -11,4 +11,5 @@ if __name__ == "__main__":
     gpus = math.prod(dims)
     file = f"./yccl_AG/{gpus}GPUs/ring_{"_".join([str(i) for i in dims])}" \
         f"_channel_{"_".join([str(i) for i in channels])}_4GPUs_out/yccl_test.xml"
+    # _odd2odd
     root.store(file)
