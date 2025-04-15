@@ -32,10 +32,10 @@ def heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll, dims, channels):
                 copy(algo, src, dst, channel_id)
         # 机间传输
         chunk_size = one_data_count
-        assert chunk_size % (channels[0] // 2) == 0
-        count = chunk_size // channels[0] * 2
+        assert chunk_size % channels[0] == 0
+        count = chunk_size // channels[0]
         for step in range(dims[0]-1):
-            for channel_id in range(channels[0] // 2):
+            for channel_id in range(channels[0]):
                 for index in range(ngpus):
                     src_rank = index if index % 2 == 0 else (index + 1) % dims[1] + index // dims[1] * dims[1]
                     dst_rank = (src_rank + dims[1]) % ngpus # dims[1]在AG里是8
@@ -44,22 +44,21 @@ def heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll, dims, channels):
                     src = Chunk(src_rank, chunk_src_index, count)
                     chunk_dst_index = (_step + 1) * chunk_size + channel_id * count
                     dst = Chunk(dst_rank, chunk_dst_index, count)
-                    _channel_id = channel_id if index % 2 == 0 else channel_id + channels[0] // 2
-                    copy(algo, src, dst, _channel_id)
-        # # 7->0,1->2,3->4,5->6 反向回传
-        # chunk_size = one_data_count * (dims[0]-1)
-        # this_chan = 2
-        # assert chunk_size % this_chan == 0
-        # count = chunk_size // this_chan
-        # for channel_id in range(this_chan):
-        #     for index in range(1, ngpus, 2):
-        #         src_rank = (index + 1) % dims[1] + index // dims[1] * dims[1]
-        #         dst_rank = index
-        #         chunk_src_index = one_data_count * (dims[0]+1) + channel_id * count
-        #         src = Chunk(src_rank, chunk_src_index, count)
-        #         chunk_dst_index = one_data_count + channel_id * count
-        #         dst = Chunk(dst_rank, chunk_dst_index, count)
-        #         copy(algo, src, dst, channel_id)
+                    copy(algo, src, dst, channel_id)
+        # 7->0,1->2,3->4,5->6 反向回传
+        chunk_size = one_data_count * (dims[0]-1)
+        this_chan = 2
+        assert chunk_size % this_chan == 0
+        count = chunk_size // this_chan
+        for channel_id in range(this_chan):
+            for index in range(1, ngpus, 2):
+                src_rank = (index + 1) % dims[1] + index // dims[1] * dims[1]
+                dst_rank = index
+                chunk_src_index = one_data_count * (dims[0]+1) + channel_id * count
+                src = Chunk(src_rank, chunk_src_index, count)
+                chunk_dst_index = one_data_count + channel_id * count
+                dst = Chunk(dst_rank, chunk_dst_index, count)
+                copy(algo, src, dst, channel_id)
         # 机内传输
         chunk_size = one_data_count * dims[0]
         assert chunk_size % channels[1] == 0
@@ -76,20 +75,6 @@ def heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll, dims, channels):
                     chunk_dst_index = (step + 1) * chunk_size + channel_id * count
                     dst = Chunk(next_rank, chunk_dst_index, count)
                     copy(algo, src, dst, channel_id)
-        
-        # 7->0,1->2,3->4,5->6 反向回传, 机内转完之后, 1有7的数据, 在第(2*dims[0]+1)*one_data_count的位置
-        chunk_size = one_data_count * (dims[0]-1)
-        assert chunk_size % channels[1] == 0
-        count = chunk_size // channels[1]
-        for channel_id in range(channels[1]):
-            for index in range(1, ngpus, 2):
-                src_rank = index
-                dst_rank = (index - 2) % dims[1] + index // dims[1] * dims[1]
-                chunk_src_index = one_data_count * (2*dims[0]+1) + channel_id * count
-                src = Chunk(src_rank, chunk_src_index, count)
-                chunk_dst_index = one_data_count + channel_id * count
-                dst = Chunk(dst_rank, chunk_dst_index, count)
-                copy(algo, src, dst, channel_id)
 
     elif coll == RS:
         ## TODO AG和RS是相反的
