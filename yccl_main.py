@@ -3,7 +3,7 @@ from yccl import *
 
 if __name__ == "__main__":
     dims = [8, 2]
-    channels = [16, 4]
+    channels = [16, 8]
     coll = AG
     is_4gpus_out = False
     if not is_4gpus_out:
