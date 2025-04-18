@@ -4,8 +4,13 @@ import os
 AG='allgather'
 RS='reducescatter'
 
-SEND = 's'
-RECV = 'r'
+SEND = 's' # [src] -> send
+RECV = 'r' # recv -> [dst]
+COPY = 'cpy' # [src] -> [dst]
+# RECV_COPY_SEND = 'rcs' # recv -> [dst] -> send
+RECV_REDUCE_COPY_SEND = 'rrcs' # recv + [src] -> [dst] -> send, [src] == [dst]
+RECV_REDUCE_COPY = 'rrc' # recv + [src] -> [dst], [src] == [dst]
+RECV_REDUCE_SEND = 'rrs' # recv + [src] -> send
 
 class Node():
     def __init__(self, nodeType, parent: "Node" =None):
@@ -61,6 +66,7 @@ class AlgoNode(Node):
         self.set_attribute('maxBytes', '0')
         self.num_gpus = ngpus
         self.nchunksperloop = nchunksperloop
+        self.coll = coll
     
     def get_gpu(self, gpu_id) -> "GpuNode":
         gpu = self.children[gpu_id]
@@ -75,6 +81,12 @@ class AlgoNode(Node):
         GpuNode(gpu_id=gpu_id, i_chunks=i_chunks, o_chunks=o_chunks, s_chunks=s_chunks, one_data_count=one_data_count, parent_algo=self)
     
     def check(self):
+        if self.coll == AG:
+            self.check_ag()
+        elif self.coll == RS:
+            self.check_rs()
+
+    def check_ag(self):
         is_error = False
         for gpu in self.children:
             for dep in gpu.data_deps:
@@ -84,6 +96,10 @@ class AlgoNode(Node):
                     break
         if not is_error:
             print("Data check passed")
+    
+    def check_rs(self):
+        pass
+        print("Not check RS")
 
 class GpuNode(Node):
     def __init__(self, gpu_id, i_chunks, o_chunks, s_chunks, one_data_count, parent_algo:AlgoNode):
@@ -97,9 +113,14 @@ class GpuNode(Node):
         nchunksperloop = self.parent.nchunksperloop
         ## 记录数据块依赖
         self.data_deps = [None for _ in range(nchunksperloop)]
-        ## 原本就有的数据块
-        for i in range(one_data_count):
-            self.data_deps[i] = (-1, -1)
+        ## 原本就有的数据块, init by each algo
+        if self.parent.coll == AG:
+            # for i in range(gpu_id*one_data_count, (gpu_id+1)*one_data_count):
+            #     self.data_deps[i] = (-1, -1)
+            pass
+        elif self.parent.coll == RS:
+            ## 当前gpu所持有的数据块, 是机内rank-1的数据（这一部分无需等待）
+            pass
     
     def get_tb(self, tb_id):
         tb = self.children[tb_id]
@@ -130,25 +151,60 @@ class GpuNode(Node):
         tb = TbNode(send_gpu_id, recv_gpu_id, channel_id, self)
         return tb
     
+    def check_exist(self, start, count, type, flag):
+        ## flag == true, data need to be exist
+        ## flag == false, data need to be not exist
+        for i in range(start, start+count):
+            if flag and self.data_deps[i] == None:
+                raise ValueError(f"{type}: Data dependency error, the data on chunk {i} in GPU {self.id} is NOT EXIST. start: {start}, end: {start+count}")
+            elif not flag and self.data_deps[i] != None:
+                raise ValueError(f"{type}: Data dependency error, the data on chunk {i} in GPU {self.id} is EXIST. start: {start}, end: {start+count}")
+    
+    def set_dep(self, start, count, dep):
+        for i in range(start, start+count):
+            self.data_deps[i] = dep
+
     def add_step(self, type, src_gpu: "GpuNode", dst_gpu: "GpuNode", src_chunk_index, dst_chunk_index, count, channel_id):
-        send_gpu_id = dst_gpu.id if type == SEND else -1
-        recv_gpu_id = src_gpu.id if type == RECV else -1
+        send_gpu_id = dst_gpu.id if type in [SEND, RECV_REDUCE_COPY_SEND, RECV_REDUCE_SEND] else -1
+        recv_gpu_id = src_gpu.id if type in [RECV, RECV_REDUCE_COPY, RECV_REDUCE_SEND] else -1
         tb = self.find_tb(send_gpu_id, recv_gpu_id, channel_id)
         if not tb:
             tb = self.add_tb(send_gpu_id, recv_gpu_id, channel_id)
-        # 处理dependency
+
+        # get deps. if use [src], then steps has deps
         multi_dep = None
-        if type == SEND:
+        if type in [SEND, COPY, RECV_REDUCE_COPY_SEND, RECV_REDUCE_SEND]:
             multi_dep = set(self.data_deps[src_chunk_index:src_chunk_index+count])
-            if None in multi_dep:
-                raise ValueError(f"Data dependency error for chunk {src_chunk_index} in GPU {self.id}, the chunk is not ready")
+            multi_dep.discard(None)
             multi_dep.discard((-1, -1))
             multi_dep = list(multi_dep)
+            for dep in multi_dep:
+                if dep[0] == tb.id:
+                    multi_dep.remove(dep)
+        
+        # check deps and set deps
+        if type == SEND:
+            self.check_exist(src_chunk_index, count, type, flag=True)
         elif type == RECV:
-            for i in range(dst_chunk_index, dst_chunk_index+count):
-                if self.data_deps[i] != None:
-                    raise ValueError(f"Data dependency already exists for chunk {i} in GPU {self.id}")
-                self.data_deps[i] = (tb.id, tb.num_steps)
+            self.check_exist(dst_chunk_index, count, type, flag=False)
+            self.set_dep(dst_chunk_index, count, (tb.id, tb.num_steps))
+        elif type == COPY:
+            self.check_exist(src_chunk_index, count, type, flag=True)
+            self.check_exist(dst_chunk_index, count, type, flag=False)
+            self.set_dep(dst_chunk_index, count, (tb.id, tb.num_steps))
+            self.set_dep(src_chunk_index, count, None)
+        elif type == RECV_REDUCE_COPY:
+            assert src_chunk_index == dst_chunk_index, "src and dst chunk index must be same"
+            # self.check_exist(src_chunk_index, count, type, flag=True)
+            self.set_dep(src_chunk_index, count, (tb.id, tb.num_steps))
+        elif type == RECV_REDUCE_COPY_SEND:
+            assert src_chunk_index == dst_chunk_index, "src and dst chunk index must be same"
+            # self.check_exist(src_chunk_index, count, type, flag=True)
+            self.set_dep(src_chunk_index, count, (tb.id, tb.num_steps))
+        elif type == RECV_REDUCE_SEND:
+            self.check_exist(src_chunk_index, count, type, flag=True)
+        
+        # add step
         tb.add_step(type, src_chunk_index, dst_chunk_index, count, multi_dep)
 
 class TbNode(Node):
@@ -245,3 +301,10 @@ def copy(algo:AlgoNode, src: Chunk, dst: Chunk, channel_id):
     count = src.count
     src_gpu.add_step(SEND, src_gpu, dst_gpu, src.chunk_index, dst.chunk_index, count, channel_id)
     dst_gpu.add_step(RECV, src_gpu, dst_gpu, src.chunk_index, dst.chunk_index, count, channel_id)
+
+def copy_reduce(algo:AlgoNode, src: Chunk, dst: Chunk, channel_id):
+    src_gpu = algo.get_gpu(src.gpu_id)
+    dst_gpu = algo.get_gpu(dst.gpu_id)
+    count = src.count
+    src_gpu.add_step(SEND, src_gpu, dst_gpu, src.chunk_index, dst.chunk_index, count, channel_id)
+    dst_gpu.add_step(RECV_REDUCE_COPY, src_gpu, dst_gpu, src.chunk_index, dst.chunk_index, count, channel_id)
