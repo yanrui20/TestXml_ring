@@ -79,8 +79,8 @@ def heterogeneous_channel_ring(coll, dims, channels):
                 for channel_id in range(channels[1]):
                     rank = index
                     next_rank = (rank + dims[0]) % ngpus
-                    chunk_gpu_id = next_rank % dims[0] * dims[1] + next_rank // dims[0]
-                    chunk_index = chunk_gpu_id * chunk_size + channel_id * count
+                    chunk_id = rank % dims[0] * dims[1] + (rank // dims[0] + step + 1) % dims[1]
+                    chunk_index = chunk_id * chunk_size + channel_id * count
                     src = Chunk(rank, chunk_index, count)
                     dst = Chunk(next_rank, chunk_index, count)
                     copy_reduce(algo, src, dst, channel_id)

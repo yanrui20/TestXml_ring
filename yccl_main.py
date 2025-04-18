@@ -5,11 +5,11 @@ if __name__ == "__main__":
     dims = [8, 2]
     channels = [16, 8]
     coll = RS
-    is_4gpus_out = False
+    is_4gpus_out = True
     if not is_4gpus_out:
         root = heterogeneous_channel_ring(coll=coll, dims=dims, channels=channels)
     else:
-        root = heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll=AG, dims=dims, channels=channels)
+        root = heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll=coll, dims=dims, channels=channels)
     # root.show_xml()
     root.check()
     gpus = math.prod(dims)
