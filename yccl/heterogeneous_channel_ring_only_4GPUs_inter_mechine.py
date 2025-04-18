@@ -138,7 +138,8 @@ def heterogeneous_channel_ring_only_4GPUs_inter_mechine(coll, dims, channels):
             for channel_id in range(this_chan):
                 src_rank = index - 1
                 dst_rank = index
-                chunk_index = dst_rank % dims[0] * dims[1] + dst_rank // dims[0]
+                chunk_id = dst_rank % dims[0] * dims[1] + dst_rank // dims[0]
+                chunk_index = chunk_id * chunk_size + channel_id * count
                 src = Chunk(src_rank, chunk_index, count)
                 dst = Chunk(dst_rank, chunk_index, count)
                 copy_reduce(algo, src, dst, channel_id)
