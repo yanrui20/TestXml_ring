@@ -3,9 +3,9 @@ from yccl import *
 
 if __name__ == "__main__":
     dims = [8, 2]
-    channels = [16, 8]
+    channels = [32, 16]
     coll = AG
-    is_4gpus_out = False
+    is_4gpus_out = True
     if not is_4gpus_out:
         root = heterogeneous_channel_ring(coll=coll, dims=dims, channels=channels)
     else:
